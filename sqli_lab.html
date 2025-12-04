@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQLi Simulation Lab</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+       
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a2e; 
+            color: #e4e6f2;
+        }
+        .console-output {
+            background-color: #0f121d; 
+            border-left: 4px solid #4a90e2;
+            min-height: 100px;
+            overflow-x: auto;
+        }
+        .input-box {
+            background-color: #2c2c44;
+            border-color: #4a90e2;
+            color: #f0f0f0;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-2xl bg-[#232946] p-6 sm:p-8 rounded-xl shadow-2xl border border-[#4a90e2]">
+        <h1 class="text-3xl sm:text-4xl font-bold text-[#eebbc3] mb-2 text-center">
+            Secret Data Lookup Interface
+        </h1>
+        <p class="text-center text-sm mb-6 text-[#b8c2d6]">
+            Simulated vulnerable interface for educational purposes.
+        </p>
+
+        <!-- Instruction Panel -->
+        <div class="bg-[#2c2c44] p-4 rounded-lg mb-6 border border-gray-600">
+            <h2 class="text-xl font-semibold text-[#a7ff83] mb-2">Goal: Retrieve the Hidden Flag</h2>
+            <p class="text-sm">
+                This input field is vulnerable. It is internally executing a query similar to:
+                <code class="block mt-2 p-2 bg-[#1a1a2e] rounded text-[#4a90e2] overflow-x-auto text-xs">
+                    SELECT name, role FROM users WHERE name = '[USER INPUT]';
+                </code>
+            </p>
+            <p class="text-sm mt-2">
+                Use an appropriate SQL Injection payload (e.g., using <code>UNION SELECT</code> and comments) to force the database to reveal the secret flag's column instead of a public user's role.
+            </p>
+        </div>
+
+        <!-- Input Form -->
+        <div id="lookup-form" class="flex flex-col sm:flex-row gap-4 mb-6">
+            <input type="text" id="user-input" placeholder="Enter user name or SQLi payload"
+                   class="input-box p-3 flex-grow rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4a90e2]"
+                   value="">
+            <button onclick="performLookup()"
+                    class="bg-[#4a90e2] hover:bg-[#5b98e7] text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-md">
+                Execute Lookup
+            </button>
+        </div>
+
+        <!-- Output Console -->
+        <div class="mt-8">
+            <h2 class="text-xl font-semibold text-[#eebbc3] mb-3">Database Response Console</h2>
+            <pre id="output-console" class="console-output p-4 rounded-lg text-sm"></pre>
+        </div>
+    </div>
+
+    <script>
+        // --- SIMULATED DATABASE ---
+        const DATABASE = {
+            
+            PUBLIC_USERS: [
+                { name: "Alice", role: "Auditor" },
+                { name: "Bob", role: "Guest" },
+                { name: "Charlie", role: "Editor" }
+            ],
+            // Secret data (simulated 'secrets' table)
+            SECRET_FLAG: "FLAG{SGksIHdlbGNvbWUgdG8gdGhlIGRhcmtmZWVkMjAwNQ==}",
+            SECRET_COLUMN_NAME: "FLAG_VALUE"
+        };
+        
+        // --- UTILITY FUNCTIONS ---
+        
+        // Custom safer logging function
+        function log(message, isError = false) {
+            const consoleElement = document.getElementById('output-console');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            
+            const safeMessage = message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            
+            consoleElement.innerHTML += `<span class="text-gray-400">[${timestamp}] </span>`;
+            if (isError) {
+                consoleElement.innerHTML += `<span class="text-red-400">ERROR: ${safeMessage}</span>\n`;
+            } else {
+                consoleElement.innerHTML += `${safeMessage}\n`;
+            }
+            // Scroll to the bottom
+            consoleElement.scrollTop = consoleElement.scrollHeight;
+        }
+
+        // Initialize the console with a welcome message
+        document.addEventListener('DOMContentLoaded', () => {
+            log("System initialized. Awaiting user input...");
+        });
+
+        /**
+         * Simulates a vulnerable database query based on user input.
+         */
+        function performLookup() {
+            const input = document.getElementById('user-input').value.trim();
+            const consoleElement = document.getElementById('output-console');
+            consoleElement.textContent = ''; // Clear previous output
+            
+            if (!input) {
+                log("Input cannot be empty.", true);
+                return;
+            }
+
+            // 1. Simulate the construction of the vulnerable query string
+            const simulatedQuery = `SELECT name, role FROM users WHERE name = '${input}';`;
+            log(`[DEBUG] Attempting to execute: ${simulatedQuery}`);
+
+            // 2. Normalize and check for the common SQLi payload pattern
+            const normalizedInput = input.toUpperCase().replace(/\s+/g, ' ');
+
+            // Check for UNION SELECT attack (case-insensitive, whitespace-agnostic)
+            // Example payload: ' UNION SELECT NULL, FLAG_VALUE FROM secrets --
+            const unionSelectPattern = /'\s*UNION\s+SELECT\s+NULL,\s*(FLAG_VALUE|FLAG{.*})\s+FROM\s+secrets/i;
+
+            if (unionSelectPattern.test(normalizedInput)) {
+                // --- VULNERABILITY SIMULATION SUCCESS ---
+                
+                // Simulate the malicious query successfully appending the secret column
+                log("Query successful! Attacker's Query: Retrieved two columns.", false);
+                
+                const secretData = [
+                    { name: DATABASE.SECRET_COLUMN_NAME, role: DATABASE.SECRET_FLAG },
+                    // In a real database, this might return multiple rows, but we simplify.
+                ];
+                
+                log("\n--- QUERY RESULT ---", false);
+                secretData.forEach(item => {
+                    log(`| ${item.name.padEnd(15)} | ${item.role.padEnd(40)} |`);
+                });
+                log(`| ${'-'.repeat(17)}+${'-'.repeat(42)} |`);
+                log(`| ${'Name'.padEnd(15)} | ${'Role / Data'.padEnd(40)} |`, false);
+                log("--- FLAG RETRIEVED! ---", false);
+                
+            } else if (normalizedInput.includes("' OR '1'='1")) {
+                // --- Simulated Tautology Attack (e.g., login bypass) ---
+                
+                log("Query successful! Attacker's Query: Tautology always true.", false);
+                log("\n--- QUERY RESULT ---", false);
+                log("Simulating all user roles being returned (e.g., admin login bypass):", false);
+                DATABASE.PUBLIC_USERS.forEach(user => {
+                    log(`- User: ${user.name}, Role: ${user.role}`);
+                });
+                log("Flag not found, try UNION SELECT to extract new columns.", true);
+                
+            } else if (input.includes("--") || input.includes("#") || input.includes("/*")) {
+                 // Simulate simple comment usage
+                 log("Comment detected. Query executed, but returned no data or was invalid.", true);
+                 log("Hint: Comments help terminate the original query cleanly.", false);
+
+            } else {
+                // --- SIMULATED NORMAL EXECUTION (SAFE QUERY) ---
+                
+                // Simulate looking up a user in the database
+                const foundUser = DATABASE.PUBLIC_USERS.find(
+                    user => user.name.toLowerCase() === input.toLowerCase()
+                );
+
+                log("\n--- QUERY RESULT ---", false);
+
+                if (foundUser) {
+                    log(`Successfully found user: ${foundUser.name}`, false);
+                    log(`User Role: ${foundUser.role}`, false);
+                } else {
+                    log(`No public user found matching '${input}'.`, true);
+                    log(`Internal Database Error (simulated): Query returned 0 rows.`, true);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
